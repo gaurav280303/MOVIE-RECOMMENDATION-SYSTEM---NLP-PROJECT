@@ -14,22 +14,18 @@ load_dotenv()
 API_KEY = os.getenv("TMDB_API_KEY")
 app = FastAPI()
 
-# Setup Folders
-for folder in ["static", "templates", "models"]:
-    if not os.path.exists(folder): os.makedirs(folder)
+# We tell Jinja2 to look in the current folder (.) instead of a "templates" folder
+templates = Jinja2Templates(directory=".")
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-
-# Load Data
+# Load Data - We removed the "models/" prefix because your files are in the main list
 try:
-    with open("models/df.pkl", "rb") as f:
+    with open("df.pkl", "rb") as f:
         movies_df = pickle.load(f)
-    with open("models/indices.pkl", "rb") as f:
+    with open("indices.pkl", "rb") as f:
         indices = pickle.load(f)
     TITLE_COL = 'title' if 'title' in movies_df.columns else movies_df.columns[0]
 except Exception as e:
-    print(f"Error: {e}")
+    print(f"Data Load Error: {e}")
     movies_df = pd.DataFrame(columns=['title'])
     TITLE_COL = 'title'
 
@@ -46,7 +42,8 @@ def fetch_poster(movie_title):
 
 def get_recommendations(title, num_rec):
     try:
-        with open("models/tfidf_matrix.pkl", "rb") as f:
+        # Looking for tfidf_matrix.pkl in the main folder
+        with open("tfidf_matrix.pkl", "rb") as f:
             tfidf_matrix = pickle.load(f)
         idx = indices[title]
         sim_scores = cosine_similarity(tfidf_matrix[idx], tfidf_matrix).flatten()
@@ -64,6 +61,7 @@ def get_recommendations(title, num_rec):
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     movie_list = sorted(movies_df[TITLE_COL].astype(str).unique().tolist())
+    # We use index.html directly because it's in the root
     return templates.TemplateResponse("index.html", {"request": request, "movies": movie_list})
 
 @app.post("/recommend", response_class=HTMLResponse)
@@ -77,4 +75,4 @@ async def recommend(request: Request, movie_name: str = Form(...), num_movies: i
     })
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8089)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
